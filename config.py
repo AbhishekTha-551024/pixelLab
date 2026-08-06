@@ -17,13 +17,14 @@ os.makedirs(TEMP_DIR, exist_ok=True)
 
 # --- VIDEO RENDER SETTINGS ---
 # For Fast Testing & Cloud Hosting (Recommended):
-# VIDEO_WIDTH = 1920   # 1080p Width
-# VIDEO_HEIGHT = 1080  # 1080p Height
-# DEFAULT_PRESET = "ultrafast"
-# DEFAULT_BITRATE = "8000k"
+VIDEO_WIDTH = 1920   # 1080p Width
+VIDEO_HEIGHT = 1080  # 1080p Height
+DEFAULT_PRESET = "ultrafast"
+DEFAULT_BITRATE = "8000k"
 
-# For Local 4K Ultra HD Exports (Uncomment to enable):
-VIDEO_WIDTH = 3840
-VIDEO_HEIGHT = 2160
-DEFAULT_PRESET = "medium"
-DEFAULT_BITRATE = "35000k"
+# # For Local 4K Ultra HD Exports (Uncomment to enable):
+# VIDEO_WIDTH = 1280
+# VIDEO_HEIGHT = 1080
+# DEFAULT_PRESET = "ultrafast"
+# DEFAULT_BITRATE = "5000k"
+# FPS = 24
