@@ -1,0 +1,8 @@
+groq
+moviepy
+opencv-python-headless
+edge-tts
+pillow
+requests
+gradio
+pydantic
