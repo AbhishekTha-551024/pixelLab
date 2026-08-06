@@ -13,14 +13,15 @@ from config import OUTPUT_DIR, TEMP_DIR, VIDEO_WIDTH, VIDEO_HEIGHT, DEFAULT_PRES
 
 def apply_subtitles_with_time(clip, narration, duration, sub_config):
     """
-    MoviePy v2 compatible time-aware subtitle rendering.
-    clip.fl() use karo — yahi ek method hai jisme (get_frame, t) dono milte hain.
+    MoviePy v2 mein time-aware frame processing ka SAHI tarika.
+    transform(func) — func signature: (get_frame, t) -> frame
+    fl() exist hi nahi karta v2 mein — transform() use karo.
     """
     def subtitle_filter(get_frame, t):
         frame = get_frame(t)
         return apply_cinematic_vfx(frame, narration, t, duration, sub_config)
 
-    return clip.fl(subtitle_filter)
+    return clip.transform(subtitle_filter)
 
 
 def build_master_video(scenes, sub_config, output_filename="final_video.mp4"):
@@ -37,7 +38,7 @@ def build_master_video(scenes, sub_config, output_filename="final_video.mp4"):
 
         print(f"\n🎬 Processing Scene {idx}: \"{narration}\"")
 
-        # 1. Generate Voiceover (subprocess-based, no asyncio conflict)
+        # 1. Generate Voiceover
         audio_file = os.path.join(TEMP_DIR, f"audio_{idx:02d}.mp3")
         generate_voiceover(narration, audio_file)
 
@@ -56,7 +57,7 @@ def build_master_video(scenes, sub_config, output_filename="final_video.mp4"):
             audio_clip.close()
             continue
 
-        # 3. Crop & Resize to target resolution
+        # 3. Crop & Resize
         clip = VideoFileClip(video_file)
         w, h = clip.size
         target_ratio = VIDEO_WIDTH / VIDEO_HEIGHT
@@ -71,13 +72,13 @@ def build_master_video(scenes, sub_config, output_filename="final_video.mp4"):
 
         clip = clip.resized(new_size=(VIDEO_WIDTH, VIDEO_HEIGHT))
 
-        # 4. Loop or trim to match audio duration
+        # 4. Loop or trim to audio duration
         if clip.duration < audio_dur:
             clip = clip.with_effects([vfx.Loop(duration=audio_dur)])
         else:
             clip = clip.subclipped(0, audio_dur)
 
-        # 5. Apply subtitles via fl() — MoviePy v2 ka sahi time-aware method
+        # 5. Apply subtitles — transform() is the correct MoviePy v2 method
         clip = apply_subtitles_with_time(clip, narration, audio_dur, sub_config)
 
         # 6. Attach audio
@@ -118,7 +119,7 @@ def build_master_video(scenes, sub_config, output_filename="final_video.mp4"):
             pass
     final_clip.close()
 
-    # 9. Cleanup temp files (inotify limit bhi kam hogi)
+    # 9. Cleanup temp files
     print("\n🧹 Cleaning temp files...")
     if os.path.exists(TEMP_DIR):
         for item in os.listdir(TEMP_DIR):
