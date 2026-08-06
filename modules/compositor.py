@@ -13,7 +13,8 @@ from config import OUTPUT_DIR, TEMP_DIR, VIDEO_WIDTH, VIDEO_HEIGHT, DEFAULT_PRES
 
 def build_master_video(scenes, sub_config, output_filename="final_video.mp4"):
     """
-    Assembles audio, downloaded HD video clips, and VFX subtitles into a crystal-clear rendered video.
+    Assembles audio, downloaded HD video clips, and VFX subtitles into a crystal-clear rendered video,
+    then automatically cleans up temporary files to prevent server watcher crashes.
     """
     final_output_path = os.path.join(OUTPUT_DIR, output_filename)
     processed_clips = []
@@ -37,13 +38,13 @@ def build_master_video(scenes, sub_config, output_filename="final_video.mp4"):
         audio_dur = audio_clip.duration
         audio_clips_list.append(audio_clip)
 
-        # 2. Download Stock Footage (Pulls highest available 1080p/4K source)
+        # 2. Download Stock Footage
         video_file = get_stock_clip(query, idx)
         if not video_file or not os.path.exists(video_file):
             print(f"⚠️ Stock footage download failed for query '{query}'. Skipping scene.")
             continue
 
-        # 3. Clean Full HD 1080p Center-Crop & Resize (Prevents stretching & preserves sharpness)
+        # 3. Clean Full HD 1080p Center-Crop & Resize
         clip = VideoFileClip(video_file)
         w, h = clip.size
         target_ratio = VIDEO_WIDTH / VIDEO_HEIGHT
@@ -77,10 +78,11 @@ def build_master_video(scenes, sub_config, output_filename="final_video.mp4"):
         print("❌ No valid clips were successfully processed.")
         return False
 
-    # 6. Concatenate & Export Master Video with High-Quality FFmpeg Flags
+    # 6. Concatenate & Export Master Video
     print("\n⚡ Concatenating clips and rendering Full HD master video...")
     final_clip = concatenate_videoclips(processed_clips, method="compose")
     
+    temp_audio_path = os.path.join(TEMP_DIR, "temp-audio.m4a")
     final_clip.write_videofile(
         final_output_path,
         codec="libx264",
@@ -88,15 +90,29 @@ def build_master_video(scenes, sub_config, output_filename="final_video.mp4"):
         fps=FPS,
         preset=DEFAULT_PRESET,
         bitrate=DEFAULT_BITRATE,
-        ffmpeg_params=["-crf", "18", "-pix_fmt", "yuv420p"]
+        ffmpeg_params=["-crf", "18", "-pix_fmt", "yuv420p"],
+        temp_audiofile=temp_audio_path,
+        remove_temp=True
     )
 
-    # Clean up file handles
+    # 7. Close File Handles
     for c in processed_clips:
         c.close()
     for a in audio_clips_list:
         a.close()
     final_clip.close()
+
+    # 8. AUTOMATIC INOTIFY CLEANUP: Delete temporary clips to prevent [Errno 28] limit reached
+    print("\n🧹 Cleaning up temporary files from output/temp/...")
+    if os.path.exists(TEMP_DIR):
+        for item in os.listdir(TEMP_DIR):
+            item_path = os.path.join(TEMP_DIR, item)
+            try:
+                if os.path.isfile(item_path):
+                    os.remove(item_path)
+            except Exception as e:
+                print(f"⚠️ Could not delete {item_path}: {e}")
+    print("✅ Temp files successfully purged!")
 
     print(f"\n🎉 Success! High-quality video saved at: {final_output_path}")
     return True
