@@ -51,7 +51,6 @@ with st.sidebar:
 
     enable_letterbox = st.checkbox("Enable Cinematic Letterbox (2.35:1)", value=True)
 
-# Package Subtitle Configuration Settings
 subtitle_config = {
     "size": sub_size,
     "style": sub_style,
@@ -63,10 +62,10 @@ subtitle_config = {
 # --- MAIN INTERFACE ---
 user_script = st.text_area(
     "Enter Video Script / Topic:",
-    value="""Futuristic neon cities are expanding across the entire world today.
-Advanced high speed trains connect distant megacities in minutes.
-Clean renewable solar farms generate limitless energy for humanity.
-Artificial intelligence drives the next great industrial revolution forward.""",
+    value="""Robot helpers assist humans daily in modern smart homes.
+Precision robots save lives during complex medical surgeries.
+Robots harvest many crops efficiently across modern farms.
+Robots build tall skyscrapers swiftly using advanced automation.""",
     height=150
 )
 
@@ -79,20 +78,20 @@ if st.button("🚀 Render Custom HD Video", type="primary", disabled=not active_
     if not user_script.strip():
         st.warning("⚠️ Please enter a script first.")
     else:
-        scene_count = 4 if "30" in duration_option else 8
-        word_length = "8 to 12 words" if scene_count == 4 else "12 to 18 words"
+      scene_count = 4 if "30" in duration_option else 8
+      word_length = "8 to 12 words" if scene_count == 4 else "12 to 18 words"
 
-        with st.spinner("⏳ Analyzing script with AI Director & rendering video... (~1 minute)"):
-            scenes = analyze_script(user_script, active_api_key, scene_count, word_length)
-            
-            if not scenes:
-                st.error("❌ AI Director failed to generate scenes. Check your Groq API key.")
-            else:
-                out_path = os.path.join(OUTPUT_DIR, "final_video.mp4")
-                success = build_master_video(scenes, subtitle_config, output_filename="final_video.mp4")
-                
-                if success and os.path.exists(out_path):
-                    st.success("🎉 Video rendered successfully with your selected custom settings!")
-                    st.video(out_path)
-                else:
-                    st.error("❌ Video rendering failed during compilation.")
+      with st.spinner("⏳ Analyzing script with AI Director & rendering video... (~1 minute)"):
+        scenes = analyze_script(active_api_key, user_script, scene_count, word_length)
+        
+        if not scenes:
+          st.error("❌ AI Director failed to generate scenes. Check your Groq API key.")
+        else:
+          out_path = os.path.join(OUTPUT_DIR, "final_video.mp4")
+          success = build_master_video(scenes, subtitle_config, output_filename="final_video.mp4")
+          
+          if success and os.path.exists(out_path):
+            st.success("🎉 Video rendered successfully with your selected custom settings!")
+            st.video(out_path)
+          else:
+            st.error("❌ Video rendering failed during compilation.")
