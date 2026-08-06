@@ -37,10 +37,10 @@ async def generate_voiceover(text, output_file):
     communicate = edge_tts.Communicate(text, VOICE)
     await communicate.save(output_file)
 
-# --- SUBTITLES & VFX (HD ENHANCED) ---
-def draw_kinetic_subtitles(frame, text, t, duration):
-    """Renders prominent, highly-legible kinetic subtitles across platforms."""
-    if not text:
+# --- DYNAMIC SUBTITLE ENGINE WITH CUSTOM OPTIONS ---
+def draw_kinetic_subtitles(frame, text, t, duration, sub_config):
+    """Renders highly-customizable kinetic subtitles based on user settings."""
+    if not text or not text.strip():
         return frame
 
     h, w = frame.shape[:2]
@@ -53,62 +53,106 @@ def draw_kinetic_subtitles(frame, text, t, duration):
     active_idx = min(active_idx, len(words) - 1)
 
     img = Image.fromarray(frame)
-    draw = ImageDraw.Draw(img)
+    draw = ImageDraw.Draw(img, "RGBA")
 
-    # Dynamic high-resolution font sizing (6% of frame height)
-    font_size = max(28, int(h * 0.055))
-    
+    # 1. Font Size Calculation
+    size_map = {
+        "Small": 0.038,
+        "Medium": 0.055,
+        "Large": 0.072,
+        "Extra Large": 0.090
+    }
+    font_size = max(20, int(h * size_map.get(sub_config["size"], 0.055)))
+
+    # 2. Font File Selection
+    font_file = sub_config["font"]
+    font = None
     try:
-        font = ImageFont.truetype("DejaVuSans-Bold.ttf", font_size)
+        font = ImageFont.truetype(font_file, font_size)
     except IOError:
         try:
-            font = ImageFont.truetype("arial.ttf", font_size)
+            font = ImageFont.truetype("DejaVuSans-Bold.ttf", font_size)
         except IOError:
-            # High-res default fallback for Linux cloud environments
             try:
                 font = ImageFont.load_default(size=font_size)
             except TypeError:
                 font = ImageFont.load_default()
 
+    # 3. Y-Position Calculation
+    pos_map = {
+        "Bottom": 0.80,
+        "Center": 0.45,
+        "Top": 0.15
+    }
+    start_y = int(h * pos_map.get(sub_config["position"], 0.80))
+
+    # Calculate total dimensions
     total_text = " ".join(words)
     bbox = draw.textbbox((0, 0), total_text, font=font)
     text_w = bbox[2] - bbox[0]
+    text_h = bbox[3] - bbox[1]
     
     start_x = max(20, (w - text_w) // 2)
-    start_y = int(h * 0.80)
 
+    # 4. Optional Semi-Transparent Box Background
+    if sub_config["style"] == "Boxed Background":
+        padding_x = 20
+        padding_y = 12
+        box_rect = [
+            max(10, start_x - padding_x),
+            start_y - padding_y,
+            min(w - 10, start_x + text_w + padding_x),
+            start_y + text_h + padding_y
+        ]
+        draw.rectangle(box_rect, fill=(0, 0, 0, 160))
+
+    # 5. Word-by-Word Rendering
     current_x = start_x
     space_w = draw.textbbox((0, 0), " ", font=font)[2]
 
     for idx, word in enumerate(words):
         word_w = draw.textbbox((0, 0), word, font=font)[2]
-        color = (255, 235, 59) if idx == active_idx else (255, 255, 255)
-        
-        # Thick black outline stroke for maximum readability on any background
+
+        # Style Color Profiles
+        if sub_config["style"] == "Kinetic Yellow":
+            color = (255, 235, 59) if idx == active_idx else (255, 255, 255)
+            stroke_color = (0, 0, 0)
+        elif sub_config["style"] == "Cyberpunk Neon":
+            color = (0, 255, 255) if idx == active_idx else (255, 255, 255)
+            stroke_color = (255, 0, 128) if idx == active_idx else (0, 0, 0)
+        elif sub_config["style"] == "Clean Classic":
+            color = (255, 255, 255)
+            stroke_color = (0, 0, 0)
+        else:  # Boxed Background
+            color = (255, 235, 59) if idx == active_idx else (255, 255, 255)
+            stroke_color = (0, 0, 0)
+
+        # Thick Outline Stroke for Legibility
         stroke_radius = max(2, int(font_size * 0.08))
         for stroke_x in range(-stroke_radius, stroke_radius + 1):
             for stroke_y in range(-stroke_radius, stroke_radius + 1):
-                draw.text((current_x + stroke_x, start_y + stroke_y), word, font=font, fill=(0, 0, 0))
-        
+                draw.text((current_x + stroke_x, start_y + stroke_y), word, font=font, fill=stroke_color)
+
         draw.text((current_x, start_y), word, font=font, fill=color)
         current_x += word_w + space_w
 
-    return np.array(img)
+    return np.array(img.convert("RGB"))
 
-def apply_cinematic_vfx(frame, text, t, duration):
-    """Visual pipeline: Contrast adjustment + Letterbox + Subtitles."""
+def apply_cinematic_vfx(frame, text, t, duration, sub_config):
+    """VFX Pipeline: Contrast boost + Optional Letterbox + Subtitles."""
     h, w = frame.shape[:2]
 
-    # Subtle contrast and saturation boost
+    # Contrast & Saturation Boost
     frame = cv2.convertScaleAbs(frame, alpha=1.05, beta=2)
 
-    # Cinematic 2.35:1 Letterbox bars
-    bar_height = int((h - (w / 2.35)) / 2)
-    if bar_height > 0:
-        frame[:bar_height, :] = 0
-        frame[h - bar_height:, :] = 0
+    # 2.35:1 Letterbox Bar Option
+    if sub_config.get("enable_letterbox", True):
+        bar_height = int((h - (w / 2.35)) / 2)
+        if bar_height > 0:
+            frame[:bar_height, :] = 0
+            frame[h - bar_height:, :] = 0
 
-    return draw_kinetic_subtitles(frame, text, t, duration)
+    return draw_kinetic_subtitles(frame, text, t, duration, sub_config)
 
 # --- AI DIRECTOR ---
 def analyze_script(script_text, scene_count, word_length):
@@ -142,7 +186,7 @@ def analyze_script(script_text, scene_count, word_length):
 
 # --- HIGH QUALITY STOCK FETCH ---
 def get_stock_clip(search_query, index):
-    """Downloads HD (1080p/720p) stock footage from Pixabay."""
+    """Downloads HD stock footage from Pixabay."""
     filename = os.path.join(TEMP_DIR, f"clip_{index:02d}.mp4")
     url = f"https://pixabay.com/api/videos/?key={PIXABAY_API_KEY}&q={search_query}&min_width=1920&per_page=5"
     
@@ -150,14 +194,12 @@ def get_stock_clip(search_query, index):
         res = requests.get(url).json()
         hits = res.get("hits", [])
         if not hits:
-            # Fallback query if specific search yields no HD hits
             url = f"https://pixabay.com/api/videos/?key={PIXABAY_API_KEY}&q=landscape&min_width=1280&per_page=5"
             res = requests.get(url).json()
             hits = res.get("hits", [])
 
         if hits:
             v_info = hits[0].get("videos", {})
-            # Prioritize Large (1080p) -> Medium (720p)
             d_url = (
                 v_info.get("large", {}).get("url")
                 or v_info.get("medium", {}).get("url")
@@ -171,8 +213,8 @@ def get_stock_clip(search_query, index):
         print(f"❌ Error fetching stock clip for '{search_query}': {e}")
     return None
 
-# --- COMPOSITOR ENGINE (HIGH BITRATE EXPORT) ---
-def build_master_video(scenes, output_filename="final_video.mp4"):
+# --- COMPOSITOR ENGINE ---
+def build_master_video(scenes, sub_config, output_filename="final_video.mp4"):
     processed_clips = []
     audio_clips_list = []
 
@@ -192,10 +234,8 @@ def build_master_video(scenes, output_filename="final_video.mp4"):
         if not video_file or not os.path.exists(video_file):
             continue
 
-        # 3. Clip Processing without aspect stretching
+        # 3. Clean 1080p Crop
         clip = VideoFileClip(video_file)
-        
-        # Center-crop/resize to 1920x1080 cleanly
         w, h = clip.size
         target_ratio = 16 / 9
         current_ratio = w / h
@@ -209,25 +249,23 @@ def build_master_video(scenes, output_filename="final_video.mp4"):
             
         clip = clip.resized(new_size=(1920, 1080))
 
-        # Loop or crop duration to match audio
         if clip.duration < audio_dur:
             clip = vfx.Loop(duration=audio_dur).apply(clip)
         else:
             clip = clip.subclipped(0, audio_dur)
 
-        # 4. Apply Subtitles & VFX
+        # 4. Render Frame-by-Frame with User Subtitle Options
         clip = clip.transform(
-            lambda get_frame, t, dur=audio_dur, txt=narration: apply_cinematic_vfx(get_frame(t), txt, t, dur)
+            lambda get_frame, t, dur=audio_dur, txt=narration, cfg=sub_config: apply_cinematic_vfx(get_frame(t), txt, t, dur, cfg)
         )
 
-        # 5. Attach Audio
         clip = clip.with_audio(audio_clip)
         processed_clips.append(clip)
 
     if not processed_clips:
         return False
 
-    # 6. High Quality Render (12 Mbps, CRF 18)
+    # 5. Export Master Video
     final_clip = concatenate_videoclips(processed_clips, method="compose")
     
     final_clip.write_videofile(
@@ -247,15 +285,54 @@ def build_master_video(scenes, output_filename="final_video.mp4"):
 
     return True
 
-# --- STREAMLIT UI ---
-st.set_page_config(page_title="Pixelab - AI Video Generator", page_icon="🎬")
+# --- STREAMLIT UI WITH FULL CONTROLS ---
+st.set_page_config(page_title="Pixelab - AI Video Generator", page_icon="🎬", layout="wide")
 
 st.title("🎬 Pixelab - AI Video Generator")
-st.caption("Generate cinematic HD videos with AI voiceover and kinetic subtitles.")
+st.caption("Generate cinematic HD videos with customizable subtitles & AI voiceover.")
 
 if not GROQ_API_KEY:
     st.error("🔑 GROQ_API_KEY is missing! Add it in Streamlit Secrets.")
 
+# --- SIDEBAR CONTROLS ---
+with st.sidebar:
+    st.header("🎛️ Subtitle & VFX Controls")
+    
+    sub_size = st.select_slider(
+        "Subtitle Size",
+        options=["Small", "Medium", "Large", "Extra Large"],
+        value="Medium"
+    )
+    
+    sub_style = st.selectbox(
+        "Subtitle Visual Style",
+        ["Kinetic Yellow", "Cyberpunk Neon", "Clean Classic", "Boxed Background"]
+    )
+    
+    sub_position = st.selectbox(
+        "Subtitle Position",
+        ["Bottom", "Center", "Top"],
+        index=0
+    )
+    
+    font_choice = st.selectbox(
+        "Font Style",
+        ["DejaVuSans-Bold.ttf", "arial.ttf", "DejaVuSans.ttf"],
+        index=0
+    )
+
+    enable_letterbox = st.checkbox("Enable Cinematic Letterbox (2.35:1)", value=True)
+
+# Package Subtitle Settings
+subtitle_config = {
+    "size": sub_size,
+    "style": sub_style,
+    "position": sub_position,
+    "font": font_choice,
+    "enable_letterbox": enable_letterbox
+}
+
+# --- MAIN CONTENT ---
 user_script = st.text_area(
     "Enter Video Script / Topic:",
     value="""Futuristic neon cities are expanding across the entire world today.
@@ -270,24 +347,24 @@ duration_option = st.selectbox(
     ["30 Seconds (4 Scenes)", "60 Seconds (8 Scenes)"]
 )
 
-if st.button("🚀 Render HD Video", type="primary", disabled=not GROQ_API_KEY):
+if st.button("🚀 Render Custom HD Video", type="primary", disabled=not GROQ_API_KEY):
     if not user_script.strip():
         st.warning("⚠️ Please enter a script first.")
     else:
         scene_count = 4 if "30" in duration_option else 8
         word_length = "8 to 12 words" if scene_count == 4 else "12 to 18 words"
 
-        with st.spinner(f"⏳ Processing HD scenes & rendering video... (~1 min)"):
+        with st.spinner("⏳ Rendering video with your custom subtitle choices... (~1 min)"):
             scenes = analyze_script(user_script, scene_count, word_length)
             
             if not scenes:
                 st.error("❌ AI Director failed to generate scenes. Check your Groq API key.")
             else:
                 out_path = os.path.join(OUTPUT_DIR, "final_video.mp4")
-                success = build_master_video(scenes, output_filename=out_path)
+                success = build_master_video(scenes, subtitle_config, output_filename=out_path)
                 
                 if success and os.path.exists(out_path):
-                    st.success("🎉 HD Video rendered successfully!")
+                    st.success("🎉 Video rendered successfully with your selected subtitle settings!")
                     st.video(out_path)
                 else:
                     st.error("❌ Video rendering failed.")
