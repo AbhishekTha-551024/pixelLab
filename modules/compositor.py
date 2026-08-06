@@ -1,4 +1,7 @@
+import sys
 import os
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
 import asyncio
 from moviepy import (
     VideoFileClip,
@@ -12,9 +15,7 @@ from modules.subtitle_vfx import apply_cinematic_vfx
 from config import OUTPUT_DIR, TEMP_DIR, VIDEO_WIDTH, VIDEO_HEIGHT, DEFAULT_PRESET, DEFAULT_BITRATE
 
 def build_master_video(scenes, sub_config, output_filename="final_video.mp4"):
-    """
-    Assembles audio, downloaded video clips, and VFX subtitles into a final rendered video.
-    """
+    """Assembles audio, video clips, and subtitles into a rendered video."""
     final_output_path = os.path.join(OUTPUT_DIR, output_filename)
     processed_clips = []
     audio_clips_list = []
@@ -30,7 +31,6 @@ def build_master_video(scenes, sub_config, output_filename="final_video.mp4"):
         asyncio.run(generate_voiceover(narration, audio_file))
         
         if not os.path.exists(audio_file):
-            print(f"⚠️ Audio generation failed for scene {idx}")
             continue
 
         audio_clip = AudioFileClip(audio_file)
@@ -40,10 +40,9 @@ def build_master_video(scenes, sub_config, output_filename="final_video.mp4"):
         # 2. Download Stock Footage
         video_file = get_stock_clip(query, idx)
         if not video_file or not os.path.exists(video_file):
-            print(f"⚠️ Stock footage download failed for query '{query}'. Skipping scene.")
             continue
 
-        # 3. Clean 1080p Center-Crop & Resize (Prevents stretching)
+        # 3. Clean 1080p Crop & Resize
         clip = VideoFileClip(video_file)
         w, h = clip.size
         target_ratio = VIDEO_WIDTH / VIDEO_HEIGHT
@@ -58,27 +57,23 @@ def build_master_video(scenes, sub_config, output_filename="final_video.mp4"):
             
         clip = clip.resized(new_size=(VIDEO_WIDTH, VIDEO_HEIGHT))
 
-        # Loop or trim clip duration to match audio exactly
         if clip.duration < audio_dur:
             clip = vfx.Loop(duration=audio_dur).apply(clip)
         else:
             clip = clip.subclipped(0, audio_dur)
 
-        # 4. Apply Subtitles & VFX Frame-by-Frame
+        # 4. Apply Subtitles & VFX
         clip = clip.transform(
             lambda get_frame, t, dur=audio_dur, txt=narration, cfg=sub_config: apply_cinematic_vfx(get_frame(t), txt, t, dur, cfg)
         )
 
-        # 5. Attach Audio Track
         clip = clip.with_audio(audio_clip)
         processed_clips.append(clip)
 
     if not processed_clips:
-        print("❌ No valid clips were successfully processed.")
         return False
 
-    # 6. Concatenate & Export Master Video
-    print("\n⚡ Concatenating clips and rendering final video...")
+    # 5. Export Master Video
     final_clip = concatenate_videoclips(processed_clips, method="compose")
     
     final_clip.write_videofile(
@@ -91,12 +86,10 @@ def build_master_video(scenes, sub_config, output_filename="final_video.mp4"):
         ffmpeg_params=["-crf", "18", "-pix_fmt", "yuv420p"]
     )
 
-    # Clean up file handles
     for c in processed_clips:
         c.close()
     for a in audio_clips_list:
         a.close()
     final_clip.close()
 
-    print(f"\n🎉 Success! Video saved at: {final_output_path}")
     return True
