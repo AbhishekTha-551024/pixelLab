@@ -1,12 +1,10 @@
 import os
-import nest_asyncio
 import streamlit as st
 from config import GROQ_API_KEY, PIXABAY_API_KEY, OUTPUT_DIR
 from modules.ai_director import analyze_script
 from modules.compositor import build_master_video
 
-# ✅ FIX #2: Streamlit ke event loop ke saath conflict avoid karne ke liye
-nest_asyncio.apply()
+# ❌ nest_asyncio bilkul nahi — Python 3.14 + Streamlit Cloud pe crash karta hai
 
 # --- STREAMLIT PAGE SETUP ---
 st.set_page_config(
@@ -27,7 +25,6 @@ if "GROQ_API_KEY" in st.secrets:
 if "PIXABAY_API_KEY" in st.secrets:
     active_pixabay_key = st.secrets["PIXABAY_API_KEY"]
 
-# ✅ FIX #3: Dono keys ki validation
 if not active_groq_key:
     st.error("🔑 GROQ_API_KEY missing! Streamlit Secrets mein add karo.")
 if not active_pixabay_key:
@@ -35,27 +32,27 @@ if not active_pixabay_key:
 
 keys_ready = bool(active_groq_key and active_pixabay_key)
 
-# --- SIDEBAR: SUBTITLE & VFX CONTROLS ---
+# --- SIDEBAR ---
 with st.sidebar:
     st.header("🎛️ Subtitle & VFX Controls")
-    
+
     sub_size = st.select_slider(
         "Subtitle Size",
         options=["Small", "Medium", "Large", "Extra Large"],
         value="Medium"
     )
-    
+
     sub_style = st.selectbox(
         "Subtitle Visual Style",
         ["Kinetic Yellow", "Cyberpunk Neon", "Clean Classic", "Boxed Background"]
     )
-    
+
     sub_position = st.selectbox(
         "Subtitle Position",
         ["Bottom", "Center", "Top"],
         index=0
     )
-    
+
     font_choice = st.selectbox(
         "Font Style",
         ["DejaVuSans-Bold.ttf", "arial.ttf", "DejaVuSans.ttf"],
@@ -94,18 +91,18 @@ if st.button("🚀 Render Custom HD Video", type="primary", disabled=not keys_re
         scene_count = 4 if "30" in duration_option else 8
         word_length = "8 to 12 words" if scene_count == 4 else "12 to 18 words"
 
-        # ✅ Pass pixabay key to environment so stock_fetcher can use it
+        # Runtime pe keys set karo taaki modules use kar sakein
         os.environ["PIXABAY_API_KEY"] = active_pixabay_key
 
-        with st.spinner("⏳ Analyzing script with AI Director & rendering video... (~2-3 minutes)"):
+        with st.spinner("⏳ Analyzing script & rendering video... (~2-3 minutes)"):
             scenes = analyze_script(user_script, active_groq_key, scene_count, word_length)
-            
+
             if not scenes:
                 st.error("❌ AI Director failed to generate scenes. Check your Groq API key.")
             else:
                 out_path = os.path.join(OUTPUT_DIR, "final_video.mp4")
                 success = build_master_video(scenes, subtitle_config, output_filename="final_video.mp4")
-                
+
                 if success and os.path.exists(out_path):
                     st.success("🎉 Video rendered successfully!")
                     st.video(out_path)

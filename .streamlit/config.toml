@@ -1,0 +1,9 @@
+[server]
+# Inotify watch limit fix: temp/output folders ko watch mat karo
+# OSError: [Errno 28] inotify watch limit reached — yahi fix karta hai
+folderWatchBlacklist = ["output", "output/temp", "*/output/*"]
+
+[runner]
+# File watcher ko polling mode pe set karo (inotify ki jagah)
+# Streamlit Cloud pe inotify limit bahut jaldi hit hoti hai
+fastReruns = false

@@ -7,4 +7,3 @@ requests
 gradio
 pydantic
 streamlit
-nest-asyncio
