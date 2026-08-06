@@ -1,8 +1,12 @@
 import os
+import nest_asyncio
 import streamlit as st
-from config import GROQ_API_KEY, OUTPUT_DIR
+from config import GROQ_API_KEY, PIXABAY_API_KEY, OUTPUT_DIR
 from modules.ai_director import analyze_script
 from modules.compositor import build_master_video
+
+# ✅ FIX #2: Streamlit ke event loop ke saath conflict avoid karne ke liye
+nest_asyncio.apply()
 
 # --- STREAMLIT PAGE SETUP ---
 st.set_page_config(
@@ -14,15 +18,24 @@ st.set_page_config(
 st.title("🎬 Pixelab - AI Video Generator")
 st.caption("Generate cinematic HD short videos with custom subtitles and AI voiceover.")
 
-# Check for API key availability
-active_api_key = GROQ_API_KEY
+# --- API KEY RESOLUTION ---
+active_groq_key = GROQ_API_KEY
+active_pixabay_key = PIXABAY_API_KEY
+
 if "GROQ_API_KEY" in st.secrets:
-    active_api_key = st.secrets["GROQ_API_KEY"]
+    active_groq_key = st.secrets["GROQ_API_KEY"]
+if "PIXABAY_API_KEY" in st.secrets:
+    active_pixabay_key = st.secrets["PIXABAY_API_KEY"]
 
-if not active_api_key:
-    st.error("🔑 GROQ_API_KEY is missing! Please configure it in your Streamlit Secrets.")
+# ✅ FIX #3: Dono keys ki validation
+if not active_groq_key:
+    st.error("🔑 GROQ_API_KEY missing! Streamlit Secrets mein add karo.")
+if not active_pixabay_key:
+    st.error("🔑 PIXABAY_API_KEY missing! Streamlit Secrets mein add karo.")
 
-# --- SIDEBAR: ADVANCED SUBTITLE & VFX CONTROLS ---
+keys_ready = bool(active_groq_key and active_pixabay_key)
+
+# --- SIDEBAR: SUBTITLE & VFX CONTROLS ---
 with st.sidebar:
     st.header("🎛️ Subtitle & VFX Controls")
     
@@ -51,7 +64,6 @@ with st.sidebar:
 
     enable_letterbox = st.checkbox("Enable Cinematic Letterbox (2.35:1)", value=True)
 
-# Package Subtitle Configuration Settings
 subtitle_config = {
     "size": sub_size,
     "style": sub_style,
@@ -75,15 +87,18 @@ duration_option = st.selectbox(
     ["30 Seconds (4 Scenes)", "60 Seconds (8 Scenes)"]
 )
 
-if st.button("🚀 Render Custom HD Video", type="primary", disabled=not active_api_key):
+if st.button("🚀 Render Custom HD Video", type="primary", disabled=not keys_ready):
     if not user_script.strip():
         st.warning("⚠️ Please enter a script first.")
     else:
         scene_count = 4 if "30" in duration_option else 8
         word_length = "8 to 12 words" if scene_count == 4 else "12 to 18 words"
 
-        with st.spinner("⏳ Analyzing script with AI Director & rendering video... (~1 minute)"):
-            scenes = analyze_script(user_script, active_api_key, scene_count, word_length)
+        # ✅ Pass pixabay key to environment so stock_fetcher can use it
+        os.environ["PIXABAY_API_KEY"] = active_pixabay_key
+
+        with st.spinner("⏳ Analyzing script with AI Director & rendering video... (~2-3 minutes)"):
+            scenes = analyze_script(user_script, active_groq_key, scene_count, word_length)
             
             if not scenes:
                 st.error("❌ AI Director failed to generate scenes. Check your Groq API key.")
@@ -92,7 +107,7 @@ if st.button("🚀 Render Custom HD Video", type="primary", disabled=not active_
                 success = build_master_video(scenes, subtitle_config, output_filename="final_video.mp4")
                 
                 if success and os.path.exists(out_path):
-                    st.success("🎉 Video rendered successfully with your selected custom settings!")
+                    st.success("🎉 Video rendered successfully!")
                     st.video(out_path)
                 else:
-                    st.error("❌ Video rendering failed during compilation.")
+                    st.error("❌ Video rendering failed. Check logs for details.")

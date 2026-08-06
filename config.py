@@ -1,8 +1,8 @@
 import os
 
-# API Keys
+# API Keys - Load from environment or Streamlit secrets only
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
-PIXABAY_API_KEY = os.getenv("PIXABAY_API_KEY", "57035971-d6e26400d6d412197a79cbba8")
+PIXABAY_API_KEY = os.getenv("PIXABAY_API_KEY", "")  # ✅ FIX #3: Hardcoded key hata diya
 
 # Voice Settings
 VOICE = "en-US-ChristopherNeural"
@@ -16,16 +16,8 @@ os.makedirs(OUTPUT_DIR, exist_ok=True)
 os.makedirs(TEMP_DIR, exist_ok=True)
 
 # --- VIDEO RENDER SETTINGS ---
-# For Fast Testing & Cloud Hosting (Recommended):
-VIDEO_WIDTH = 1920   # 1080p Width
-VIDEO_HEIGHT = 720  # 1080p Height
+VIDEO_WIDTH = 1920
+VIDEO_HEIGHT = 720
 DEFAULT_PRESET = "ultrafast"
 DEFAULT_BITRATE = "8000k"
 FPS = 24
-
-# # For Local 4K Ultra HD Exports (Uncomment to enable):
-# VIDEO_WIDTH = 1280
-# VIDEO_HEIGHT = 1080
-# DEFAULT_PRESET = "ultrafast"
-# DEFAULT_BITRATE = "5000k"
-# FPS = 24
